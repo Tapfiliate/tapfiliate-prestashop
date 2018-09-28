@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<module>
+    <name>tapfiliate</name>
+    <displayName><![CDATA[Tapfiliate]]></displayName>
+    <version><![CDATA[2.0]]></version>
+    <description><![CDATA[Integrate Tapfiliate in your Prestashop]]></description>
+    <author><![CDATA[Tapfiliate]]></author>
+    <tab><![CDATA[advertising_marketing]]></tab>
+	<confirmUninstall><![CDATA[Are you sure you want to delete Tapfiliate from your shop?]]></confirmUninstall>
+    <is_configurable>1</is_configurable>
+    <need_instance>1</need_instance>
+	<limited_countries></limited_countries>
+</module>
