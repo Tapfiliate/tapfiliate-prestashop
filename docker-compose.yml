@@ -1,0 +1,38 @@
+version: "3.9"
+
+services:
+  db:
+    image: mysql:5.7
+    volumes:
+      - db_data:/var/lib/mysql
+    restart: always
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: prestashop
+      MYSQL_USER: admin
+      MYSQL_PASSWORD: admin
+
+  prestashop:
+    depends_on:
+      - db
+    image: prestashop/prestashop:1.7
+    ports:
+      - "8080:80"
+    volumes:
+      - ./tapfiliate/:/var/www/html/modules/tapfiliate
+    restart: always
+    environment:
+      DB_SERVER: db
+      DB_USER: admin
+      PS_DEV_MODE: 1
+      PS_FOLDER_ADMIN: adm
+      PS_INSTALL_AUTO: 1
+      PS_INSTALL_DB: 0
+      PS_DOMAIN: localhost:8080
+      ADMIN_MAIL: welcome@foo.com
+      ADMIN_PASSWD: welcome!
+
+volumes:
+  db_data: {}

@@ -2,12 +2,12 @@
 <module>
     <name>tapfiliate</name>
     <displayName><![CDATA[Tapfiliate]]></displayName>
-    <version><![CDATA[2.0]]></version>
-    <description><![CDATA[Integrate Tapfiliate in your Prestashop]]></description>
+    <version><![CDATA[3.0.1]]></version>
+    <description><![CDATA[Easily create, track and grow your own affiliate marketing programs. Affiliate tracking software for E-Commerce and SaaS that integrates seamlessly with your site in just minutes. Begin affiliate marketing to reward loyal brand ambassadors and boost sales.]]></description>
     <author><![CDATA[Tapfiliate]]></author>
-    <tab><![CDATA[advertising_marketing]]></tab>
-	<confirmUninstall><![CDATA[Are you sure you want to delete Tapfiliate from your shop?]]></confirmUninstall>
-    <is_configurable>1</is_configurable>
-    <need_instance>1</need_instance>
+    <tab><![CDATA[front_office_features]]></tab>
+	<confirmUninstall><![CDATA[Are you sure you want to uninstall?]]></confirmUninstall>
+    <is_configurable>0</is_configurable>
+    <need_instance>0</need_instance>
 	<limited_countries></limited_countries>
 </module>
