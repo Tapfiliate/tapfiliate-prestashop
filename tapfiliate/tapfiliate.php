@@ -72,49 +72,6 @@ class Tapfiliate extends Module
         $country = $country_obj->iso_code;
         $vat_number = $address_obj->vat_number;
         $company = $address_obj->company;
-
-
-        echo '<pre>';
-
-                var_dump($country);
-        echo '</pre>';
-            exit;
-
-
-
-
-        // TODO: Replace with redirect when we set up Paywall-less sign up
-
-		$output = '<h2>Tapfiliate</h2>';
-		if (Tools::isSubmit('submitTap'))
-		{
-			Configuration::updateValue('TAPFILIATE_ID', Tools::getValue('tapfiliate_id'));
-			$output .= '
-			<div class="conf confirm">
-				<img src="../img/admin/ok.gif" alt="" title="" />
-				'.$this->l('Settings updated').'
-			</div>';
-		}
-
-		return $output.$this->displayForm();
-	}
-
-	public function displayForm()
-	{
-		$output = '
-		<form action="'.Tools::safeOutput($_SERVER['REQUEST_URI']).'" method="post">
-			<fieldset class="width2">
-				<legend><img src="../img/admin/cog.gif" alt="" class="middle" />'.$this->l('Settings').'</legend>
-				<label>'.$this->l('Your Tapfiliate customer ID').'<br><a style="opacity: 0.5; font-size: 0.8em;">This can be <a href="https://tapfiliate.com/a/integration/" target="_blank">found here</a></label>
-				<div class="margin-form">
-					<input type="text" name="tapfiliate_id" value="'.Tools::safeOutput(Tools::getValue('tapfiliate_id', Configuration::get('TAPFILIATE_ID'))).'" />
-					<p class="clear">'.$this->l('Example:').' 1-123abc</p>
-				</div>
-				<center><input type="submit" name="submitTap" value="'.$this->l('Save').'" class="button" /></center>
-			</fieldset>
-		</form>';
-
-		return $output;
 	}
 
     public function hookDisplayHeader($params)
@@ -132,10 +89,7 @@ class Tapfiliate extends Module
 		$order = isset($params['order']) ? $params['order'] : null;
 
         $rules = $order->getCartRules() ?: [];
-        $coupons = array_map(function($rule) {
-            $cartRule = new CartRule($rule['id_cart_rule']);
-            return $cartRule->code;
-        }, $rules);
+        $coupons = array_map(function($rule) { return (new CartRule($rule['id_cart_rule']))->code; }, $rules);
 
 		if ($order) {
 			$amount = isset($order->total_paid_tax_excl) ? $order->total_paid_tax_excl : 0;
