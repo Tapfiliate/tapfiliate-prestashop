@@ -70,7 +70,7 @@ class Tapfiliate extends Module
         $address2 = $address_obj->address2;
         $city = $address_obj->city;
         $postcode = $address_obj->postcode;
-        $state = $state_obj->state;
+        $state = $state_obj->name;
         $country = $country_obj->iso_code;
         $vat_number = $address_obj->vat_number;
         $company = $address_obj->company;
@@ -82,7 +82,7 @@ class Tapfiliate extends Module
         }
 
         $apiAccess = new WebserviceKey();
-        $api_key = 'GENERATE_A_COMPLEX_VALUE_WITH_32_CHARACTERS'; // TODO
+        $api_key = 'GENERATE_A_COMPLEX_VALUE_WITH_32'; // TODO
         $apiAccess->key = $api_key;
         $apiAccess->save();
 
@@ -103,10 +103,11 @@ class Tapfiliate extends Module
             'api_key' => $api_key,
         ];
 
+        $this->context->smarty->assign('payload', $payload);
+
         // ?io_format=JSON
-
         // api/configurations
-
+        return $this->display(__FILE__, 'views/templates/admin/configure.tpl');
 	}
 
     public function hookDisplayHeader($params)
