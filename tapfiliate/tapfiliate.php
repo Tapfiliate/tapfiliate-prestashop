@@ -64,14 +64,49 @@ class Tapfiliate extends Module
 
         $address_obj = Context::getContext()->shop->getAddress();
         $country_obj = new Country($address_obj->id_country);
+        $state_obj = new State($address_obj->id_state);
 
         $address1 = $address_obj->address1;
         $address2 = $address_obj->address2;
         $city = $address_obj->city;
         $postcode = $address_obj->postcode;
+        $state = $state_obj->state;
         $country = $country_obj->iso_code;
         $vat_number = $address_obj->vat_number;
         $company = $address_obj->company;
+
+        $api_was_enabled = filter_var(Configuration::get('PS_WEBSERVICE'), FILTER_VALIDATE_BOOLEAN);
+
+        if (!$api_was_enabled) {
+            Configuration::updateValue('PS_WEBSERVICE', 1);
+        }
+
+        $apiAccess = new WebserviceKey();
+        $api_key = 'GENERATE_A_COMPLEX_VALUE_WITH_32_CHARACTERS'; // TODO
+        $apiAccess->key = $api_key;
+        $apiAccess->save();
+
+        $payload = [
+            'address1' => $address1,
+            'address2' => $address2,
+            'city' => $city,
+            'postcode' => $postcode,
+            'state' => $state,
+            'country' => $country,
+            'vat_number' => $vat_number,
+            'company' => $company,
+            'domain' => $domain,
+            'email' => $email,
+            'firstname' => $firstname,
+            'lastname' => $lastname,
+            'currency' => $currency,
+            'api_key' => $api_key,
+        ];
+
+        // ?io_format=JSON
+
+        // api/configurations
+
 	}
 
     public function hookDisplayHeader($params)
