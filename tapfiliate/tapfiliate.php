@@ -27,8 +27,8 @@ class Tapfiliate extends Module
 
         $this->confirmUninstall = $this->l('Are you sure you want to uninstall?');
 
-        if (!Configuration::get('TAPFILIATE')) {
-            $this->warning = $this->l('No name provided');
+        if ($this->id && !Configuration::get('TAPFILIATE_ID')) {
+            $this->warning = $this->l('The Tapfiliate module needs to be configured Tapfiliate Account ID');
         }
     }
 
@@ -56,6 +56,9 @@ class Tapfiliate extends Module
 	{
         $context = Context::getContext();
         $shop = $context->shop;
+        $shop_id = $shop->id;
+        $shop_group_id = $shop->id_shop_group;
+
         $domain = $shop->domain;
         $email = $context->employee->email;
         $firstname = $context->employee->firstname;
@@ -81,10 +84,22 @@ class Tapfiliate extends Module
             Configuration::updateValue('PS_WEBSERVICE', 1);
         }
 
-        $apiAccess = new WebserviceKey();
-        $api_key = 'GENERATE_A_COMPLEX_VALUE_WITH_32'; // TODO
-        $apiAccess->key = $api_key;
-        $apiAccess->save();
+        $api_key = null;
+        if (!Configuration::get('TAP_WEBSERVICE_KEY_ID')) {
+            $apiAccess = new WebserviceKey();
+            $api_key = substr(hash('sha256', uniqid('', true)), 0, 32);
+            $apiAccess->key = $api_key;
+            $apiAccess->save();
+
+            $permissions = [
+                'customers' => ['GET' => 1, 'POST' => 1, 'PUT' => 1, 'HEAD' => 1],
+                'orders' => ['GET' => 1, 'POST' => 1, 'PUT' => 1, 'HEAD' => 1],
+                'configurations' => ['GET' => 1, 'POST' => 1, 'PUT' => 1, 'HEAD' => 1],
+                'products' => ['GET' => 1, 'POST' => 1, 'PUT' => 1, 'HEAD' => 1],
+            ];
+
+            WebserviceKey::setPermissionForAccount($apiAccess->id, $permissions);
+        }
 
         $payload = [
             'address1' => $address1,
@@ -101,6 +116,8 @@ class Tapfiliate extends Module
             'lastname' => $lastname,
             'currency' => $currency,
             'api_key' => $api_key,
+            'shop_id' => $shop_id,
+            'shop_group_id' => $shop_group_id,
         ];
 
         $this->context->smarty->assign('payload', $payload);
