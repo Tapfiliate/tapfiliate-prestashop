@@ -6,9 +6,8 @@ if (!defined('_PS_VERSION_')) {
 
 class Tapfiliate extends Module
 {
-    const UPDATE_TYPE_REFUND = 'refund';
-    const UPDATE_TYPE_NEW = 'new';
-    const UPDATE_TYPE_PAYMENT_CONFIRMED = 'payment_confirmed';
+    const UPDATE_TYPE_UPDATE = 'order_update';
+    const UPDATE_TYPE_NEW = 'order_new';
 
     public function __construct()
     {
@@ -19,7 +18,7 @@ class Tapfiliate extends Module
         $this->need_instance = 0;
         $this->displayName = 'Tapfiliate';
         $this->ps_versions_compliancy = [
-            'min' => '1.7',
+            'min' => '1.6',
             'max' => '1.7.99',
         ];
         $this->bootstrap = true;
@@ -48,7 +47,6 @@ class Tapfiliate extends Module
             && $this->registerHook('orderConfirmation')
             && $this->registerHook('actionOrderStatusPostUpdate')
             && $this->registerHook('actionOrderSlipAdd')
-            && $this->registerHook('actionValidateOrder')
         );
     }
 
@@ -144,8 +142,7 @@ class Tapfiliate extends Module
 	{
 		$order = isset($params['order']) ? $params['order'] : null;
 
-        $rules = $order->getCartRules() ?: [];
-        $coupons = array_map(function($rule) { return (new CartRule($rule['id_cart_rule']))->code; }, $rules);
+        $coupons = $this->getCoupons($order);
 
 		if ($order) {
 			$amount = isset($order->total_paid_tax_excl) ? $order->total_paid_tax_excl : 0;
@@ -156,17 +153,11 @@ class Tapfiliate extends Module
 
             $customer_email = $order->getCustomer()->email;
             $customer_id = filter_var($customer_email, FILTER_VALIDATE_EMAIL) ? $customer_email : null;
-            $currency = new CurrencyCore($order->id_currency);
 
             // Send via API
             $this->sendOrderUpdate(
                 self::UPDATE_TYPE_NEW,
-                $order,
-                null,
-                [
-                    'currency' => $currency->iso_code,
-                    'coupons' => $coupons
-                ]
+                $order
             );
 
 			$this->context->smarty->assign([
@@ -174,7 +165,7 @@ class Tapfiliate extends Module
 			    'conversion_amount' => $conversion_amount,
 			    'tapfiliate_id' => $tapfiliate_id,
 			    'customer_id' => $customer_id,
-                'order_currency' => $currency->iso_code,
+                'order_currency' => $this->getCurrency($order),
 			    'is_order' => true,
                 'coupons' => $coupons,
             ]);
@@ -183,72 +174,49 @@ class Tapfiliate extends Module
 		}
 	}
 
-    public function hookActionValidateOrder($params)
-    {
-        $order = $params['order'];
-
-        $this->sendOrderUpdate(
-            self::UPDATE_TYPE_PAYMENT_CONFIRMED,
-            $order
-        );
-    }
-
     public function hookActionOrderSlipAdd($params)
     {
-        $order = $params['order'];
-        $amount = isset($order->total_paid_tax_excl) ? $order->total_paid_tax_excl : 0;
-        $shipping = isset($order->total_shipping_tax_excl) ? $order->total_shipping_tax_excl : 0;
-        $conversion_amount = $amount - $shipping;
-
-        foreach ($params['order']->getOrderSlipsCollection() as $slip) {
-            $conversion_amount -= $slip->total_products_tax_excl;
-        }
-
         $this->sendOrderUpdate(
-            self::UPDATE_TYPE_REFUND,
-            $order
+            self::UPDATE_TYPE_UPDATE,
+            $params['order'],
         );
     }
 
     public function hookActionOrderStatusPostUpdate($params)
     {
-        $order_state = $params['newOrderStatus'];
         $order = new Order($params['id_order']);
 
-        $new_order_state = $order_state->name;
-
-        switch ($new_order_state) {
-            case 'Refunded':
-                $this->sendOrderUpdate(
-                    self::UPDATE_TYPE_REFUND,
-                    $order,
-                0
-                );
-                break;
-        }
+        $this->sendOrderUpdate(
+            self::UPDATE_TYPE_UPDATE,
+            $order,
+        );
     }
 
-    private function sendOrderUpdate($update_type, Order $order, $order_amount = null, $options = [])
+    private function sendOrderUpdate($update_type, Order $order)
     {
-        // Get amount
-        $amount = $order_amount;
-        if (null === $order_amount) {
-            $total_paid = isset($order->total_paid_tax_excl) ? $order->total_paid_tax_excl : 0;
-            $shipping = isset($order->total_shipping_tax_excl) ? $order->total_shipping_tax_excl : 0;
-            $amount = $total_paid - $shipping;
-        }
+        $amount = $this->getOrderAmount($order);
 
-        // Customer id
-        $customer_email = $order->getCustomer()->email;
+        // Customer details
+        $customer = $order->getCustomer();
+        $customer_email = $customer->email;
+        $customer_firstname = $customer->firstname;
+        $customer_lastname = $customer->lastname;
         $customer_id = filter_var($customer_email, FILTER_VALIDATE_EMAIL) ? $customer_email : null;
 
         $payload = json_encode([
             'type' => $update_type,
             'payload' => [
-                'external_id' => (string)$order->id,
+                'external_id' => (string) $order->id,
                 'amount' => number_format($amount, 2),
                 'customer_id' => $customer_id,
-                'options' => $options
+                'customer_email' => $customer_id,
+                'customer_firstname' => $customer_firstname,
+                'customer_lastname' => $customer_lastname,
+                'status' => $order->getCurrentOrderState()->name,
+                'options' => [
+                    'currency' => $this->getCurrency($order),
+                    'coupons' => $this->getCoupons($order),
+                ],
             ]
         ]);
 
@@ -260,16 +228,49 @@ class Tapfiliate extends Module
 
         $signature = base64_encode(hash_hmac('sha256', $payload, $webhook_secret, true));
 
+        $context = Context::getContext();
+        $shop = $context->shop;
+
         try {
             $client = new \GuzzleHttp\Client();
             $client->post('https://hookb.in/qBdxKgPo0ksEwPllwRoM', [
                 'body' => $payload,
                 'headers' => [
-                    'X-Webhook-Signature' => $signature
+                    'X-Webhook-Signature' => $signature,
+                    'X-Prestashop-Domain' => $shop->domain
                 ]
             ]);
         } catch(\GuzzleHttp\Exception\GuzzleException $e) {
             Logger::addLog($e->getMessage());
         }
+    }
+
+    private function getOrderAmount(Order $order)
+    {
+        // Get base amount
+        $total_paid = isset($order->total_paid_tax_excl) ? $order->total_paid_tax_excl : 0;
+        $shipping = isset($order->total_shipping_tax_excl) ? $order->total_shipping_tax_excl : 0;
+        $amount = $total_paid - $shipping;
+
+        // Subtract refunds
+        foreach ($order->getOrderSlipsCollection() as $slip) {
+            $amount -= $slip->total_products_tax_excl;
+        }
+
+        return $amount;
+    }
+
+    private function getCoupons(Order $order)
+    {
+        $rules = $order->getCartRules() ?: [];
+
+        return array_map(function($rule) { return (new CartRule($rule['id_cart_rule']))->code; }, $rules);
+    }
+
+    private function getCurrency(Order $order)
+    {
+        $currency = new CurrencyCore($order->id_currency);
+
+        return $currency->iso_code;
     }
 }
