@@ -6,6 +6,10 @@ if (!defined('_PS_VERSION_')) {
 
 class Tapfiliate extends Module
 {
+    const UPDATE_TYPE_REFUND = 'refund';
+    const UPDATE_TYPE_NEW = 'new';
+    const UPDATE_TYPE_PAYMENT_CONFIRMED = 'payment_confirmed';
+
     public function __construct()
     {
         $this->name = 'tapfiliate';
@@ -38,12 +42,13 @@ class Tapfiliate extends Module
             Shop::setContext(Shop::CONTEXT_ALL);
         }
 
-        $shop = new Shop();
-
         return (
             parent::install()
             && $this->registerHook('header')
             && $this->registerHook('orderConfirmation')
+            && $this->registerHook('actionOrderStatusPostUpdate')
+            && $this->registerHook('actionOrderSlipAdd')
+            && $this->registerHook('actionValidateOrder')
         );
     }
 
@@ -122,8 +127,6 @@ class Tapfiliate extends Module
 
         $this->context->smarty->assign('payload', $payload);
 
-        // ?io_format=JSON
-        // api/configurations
         return $this->display(__FILE__, 'views/templates/admin/configure.tpl');
 	}
 
@@ -155,6 +158,17 @@ class Tapfiliate extends Module
             $customer_id = filter_var($customer_email, FILTER_VALIDATE_EMAIL) ? $customer_email : null;
             $currency = new CurrencyCore($order->id_currency);
 
+            // Send via API
+            $this->sendOrderUpdate(
+                self::UPDATE_TYPE_NEW,
+                $order,
+                null,
+                [
+                    'currency' => $currency->iso_code,
+                    'coupons' => $coupons
+                ]
+            );
+
 			$this->context->smarty->assign([
                 'external_id' => $order->id,
 			    'conversion_amount' => $conversion_amount,
@@ -168,4 +182,81 @@ class Tapfiliate extends Module
 			return $this->display(__FILE__, 'views/templates/hook/snippet.tpl');
 		}
 	}
+
+    public function hookActionValidateOrder($params)
+    {
+        $order = $params['order'];
+
+        $this->sendOrderUpdate(
+            self::UPDATE_TYPE_PAYMENT_CONFIRMED,
+            $order
+        );
+    }
+
+    public function hookActionOrderSlipAdd($params)
+    {
+        $order = $params['order'];
+        $amount = isset($order->total_paid_tax_excl) ? $order->total_paid_tax_excl : 0;
+        $shipping = isset($order->total_shipping_tax_excl) ? $order->total_shipping_tax_excl : 0;
+        $conversion_amount = $amount - $shipping;
+
+        foreach ($params['order']->getOrderSlipsCollection() as $slip) {
+            $conversion_amount -= $slip->total_products_tax_excl;
+        }
+
+        $this->sendOrderUpdate(
+            self::UPDATE_TYPE_REFUND,
+            $order
+        );
+    }
+
+    public function hookActionOrderStatusPostUpdate($params)
+    {
+        $order_state = $params['newOrderStatus'];
+        $order = new Order($params['id_order']);
+
+        $new_order_state = $order_state->name;
+
+        switch ($new_order_state) {
+            case 'Refunded':
+                $this->sendOrderUpdate(
+                    self::UPDATE_TYPE_REFUND,
+                    $order,
+                0
+                );
+                break;
+        }
+    }
+
+    private function sendOrderUpdate($update_type, Order $order, $order_amount = null, $options = [])
+    {
+        // Get amount
+        $amount = $order_amount;
+        if (null === $order_amount) {
+            $total_paid = isset($order->total_paid_tax_excl) ? $order->total_paid_tax_excl : 0;
+            $shipping = isset($order->total_shipping_tax_excl) ? $order->total_shipping_tax_excl : 0;
+            $amount = $total_paid - $shipping;
+        }
+
+        // Customer id
+        $customer_email = $order->getCustomer()->email;
+        $customer_id = filter_var($customer_email, FILTER_VALIDATE_EMAIL) ? $customer_email : null;
+
+        try {
+            $client = new \GuzzleHttp\Client();
+            $client->post('https://hookb.in/qBdxKgPo0ksEwPllwRoM', [
+                'body' => json_encode([
+                    'type' => $update_type,
+                    'payload' => [
+                        'external_id' => (string)$order->id,
+                        'amount' => number_format($amount, 2),
+                        'customer_id' => $customer_id,
+                        'options' => $options
+                    ]
+                ])
+            ]);
+        } catch(\GuzzleHttp\Exception\GuzzleException $e) {
+            Logger::addLog($e->getMessage());
+        }
+    }
 }

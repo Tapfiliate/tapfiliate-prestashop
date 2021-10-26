@@ -1,0 +1,20 @@
+{
+    "config": {
+        "preferred-install": "dist",
+        "platform": {
+            "php": "5.6"
+        },
+        "classmap-authoritative": true,
+        "optimize-autoloader": true,
+        "prepend-autoloader": false
+    },
+    "require-dev": {
+        "php": ">=5.6"
+    },
+    "require": {
+        "guzzlehttp/guzzle": "~6.0",
+        "ext-json": "*"
+    },
+    "author": "Tapfiliate",
+    "license": "AFL-3.0"
+}
