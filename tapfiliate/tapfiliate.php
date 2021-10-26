@@ -242,18 +242,31 @@ class Tapfiliate extends Module
         $customer_email = $order->getCustomer()->email;
         $customer_id = filter_var($customer_email, FILTER_VALIDATE_EMAIL) ? $customer_email : null;
 
+        $payload = json_encode([
+            'type' => $update_type,
+            'payload' => [
+                'external_id' => (string)$order->id,
+                'amount' => number_format($amount, 2),
+                'customer_id' => $customer_id,
+                'options' => $options
+            ]
+        ]);
+
+        if (null === $webhook_secret = Configuration::get('TAPFILIATE_WEBHOOK_SECRET')) {
+            Logger::addLog("TAPFILIATE_WEBHOOK_SECRET is missing");
+
+            return;
+        }
+
+        $signature = base64_encode(hash_hmac('sha256', $payload, $webhook_secret, true));
+
         try {
             $client = new \GuzzleHttp\Client();
             $client->post('https://hookb.in/qBdxKgPo0ksEwPllwRoM', [
-                'body' => json_encode([
-                    'type' => $update_type,
-                    'payload' => [
-                        'external_id' => (string)$order->id,
-                        'amount' => number_format($amount, 2),
-                        'customer_id' => $customer_id,
-                        'options' => $options
-                    ]
-                ])
+                'body' => $payload,
+                'headers' => [
+                    'X-Webhook-Signature' => $signature
+                ]
             ]);
         } catch(\GuzzleHttp\Exception\GuzzleException $e) {
             Logger::addLog($e->getMessage());
