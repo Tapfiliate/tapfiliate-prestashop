@@ -88,7 +88,10 @@ class Tapfiliate extends Module
         }
 
         $api_key = null;
-        if (!Configuration::get('TAP_WEBSERVICE_KEY_ID')) {
+        if ($key_id = Configuration::get('TAP_WEBSERVICE_KEY_ID')) {
+            $apiAccess = new WebserviceKey($key_id);
+            $api_key = $apiAccess->key;
+        } else {
             $apiAccess = new WebserviceKey();
             $api_key = substr(hash('sha256', uniqid('', true)), 0, 32);
             $apiAccess->key = $api_key;
@@ -102,6 +105,8 @@ class Tapfiliate extends Module
             ];
 
             WebserviceKey::setPermissionForAccount($apiAccess->id, $permissions);
+
+            Configuration::set('TAP_WEBSERVICE_KEY_ID', $apiAccess->id);
         }
 
         $payload = [
@@ -206,7 +211,7 @@ class Tapfiliate extends Module
         $payload = json_encode([
             'type' => $update_type,
             'payload' => [
-                'external_id' => (string) $order->id,
+                'external_id' => (string)$order->id,
                 'amount' => number_format($amount, 2),
                 'customer_id' => $customer_id,
                 'customer_email' => $customer_id,
@@ -218,7 +223,7 @@ class Tapfiliate extends Module
                     'coupons' => $this->getCoupons($order),
                 ],
             ]
-        ]);
+        ], JSON_THROW_ON_ERROR);
 
         if (null === $webhook_secret = Configuration::get('TAPFILIATE_WEBHOOK_SECRET')) {
             Logger::addLog("TAPFILIATE_WEBHOOK_SECRET is missing");
@@ -232,16 +237,18 @@ class Tapfiliate extends Module
         $shop = $context->shop;
 
         try {
-            $client = new \GuzzleHttp\Client();
-            $client->post('https://hookb.in/qBdxKgPo0ksEwPllwRoM', [
+            $client = new GuzzleHttp\Client();
+            // @TODO: Production url
+            $client->post('https://a.dev.tap/integrations/prestashop/webhooks/receive/', [
                 'body' => $payload,
                 'headers' => [
                     'X-Webhook-Signature' => $signature,
                     'X-Prestashop-Domain' => $shop->domain
-                ]
+                ],
+                'verify' => false // @TODO
             ]);
-        } catch(\GuzzleHttp\Exception\GuzzleException $e) {
-            Logger::addLog($e->getMessage());
+        } catch(\Exception $e) {
+            Logger::addLog("[TAPFILIATE] could not send webhook with message: {$e->getMessage()}");
         }
     }
 
