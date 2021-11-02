@@ -126,6 +126,7 @@ class Tapfiliate extends Module
             'api_key' => $api_key,
             'shop_id' => $shop_id,
             'shop_group_id' => $shop_group_id,
+            'login_key' => Configuration::get('TAPFILIATE_LOGIN_KEY')
         ];
 
         $this->context->smarty->assign('payload', $payload);
