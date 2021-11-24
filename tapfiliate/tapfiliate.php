@@ -122,7 +122,7 @@ class Tapfiliate extends Module
             'email' => $email,
             'firstname' => $firstname,
             'lastname' => $lastname,
-            'currency' => $currency,
+            'currency' => $currency->iso_code,
             'api_key' => $api_key,
             'shop_id' => $shop_id,
             'shop_group_id' => $shop_group_id,
