@@ -4,10 +4,16 @@ if (!defined('_PS_VERSION_')) {
     exit;
 }
 
+/* Custom defines made by users */
+if (is_file(__DIR__ . '/environment.php')) {
+    include_once(__DIR__ . '/environment.php');
+}
+
 class Tapfiliate extends Module
 {
     const UPDATE_TYPE_UPDATE = 'order_update';
     const UPDATE_TYPE_NEW = 'order_new';
+    const PROD_TAPFILIATE_BASE_URL = 'https://app.tapfiliate.com/';
 
     public function __construct()
     {
@@ -47,6 +53,7 @@ class Tapfiliate extends Module
             && $this->registerHook('orderConfirmation')
             && $this->registerHook('actionOrderStatusPostUpdate')
             && $this->registerHook('actionOrderSlipAdd')
+            && $this->registerHook('actionDispatcher')
         );
     }
 
@@ -55,84 +62,88 @@ class Tapfiliate extends Module
         return parent::uninstall();
     }
 
-	public function getContent()
-	{
-        $context = Context::getContext();
-        $shop = $context->shop;
-        $shop_id = $shop->id;
-        $shop_group_id = $shop->id_shop_group;
+    public function getContent() {}
 
-        $domain = $shop->domain;
-        $email = $context->employee->email;
-        $firstname = $context->employee->firstname;
-        $lastname = $context->employee->lastname;
-        $currency = $context->currency;
+    public function hookActionDispatcher($args)
+    {
+        if (
+            defined('_PS_ADMIN_DIR_')
+            && isset($args['controller_class'])
+            && $args['controller_class'] == 'AdminModulesController'
+            && Tools::getValue('configure') === $this->name
+        ) {
+            $context = Context::getContext();
+            $address_obj = Context::getContext()->shop->getAddress();
+            $country_obj = new Country($address_obj->id_country);
+            $state_obj = new State($address_obj->id_state);
+            $api_was_enabled = filter_var(Configuration::get('PS_WEBSERVICE'), FILTER_VALIDATE_BOOLEAN);
 
-        $address_obj = Context::getContext()->shop->getAddress();
-        $country_obj = new Country($address_obj->id_country);
-        $state_obj = new State($address_obj->id_state);
+            if (!$api_was_enabled) {
+                Configuration::updateValue('PS_WEBSERVICE', 1);
+            }
 
-        $address1 = $address_obj->address1;
-        $address2 = $address_obj->address2;
-        $city = $address_obj->city;
-        $postcode = $address_obj->postcode;
-        $state = $state_obj->name;
-        $country = $country_obj->iso_code;
-        $vat_number = $address_obj->vat_number;
-        $company = $address_obj->company;
+            if ($key_id = Configuration::get('TAP_WEBSERVICE_KEY_ID')) {
+                $apiAccess = new WebserviceKey($key_id);
+                $api_key = $apiAccess->key;
+            } else {
+                $apiAccess = new WebserviceKey();
+                $api_key = substr(hash('sha256', uniqid('', true)), 0, 32);
+                $apiAccess->key = $api_key;
+                $apiAccess->save();
 
-        $api_was_enabled = filter_var(Configuration::get('PS_WEBSERVICE'), FILTER_VALIDATE_BOOLEAN);
+                $permissions = [
+                    'customers' => ['GET' => 1, 'POST' => 1, 'PUT' => 1, 'HEAD' => 1],
+                    'orders' => ['GET' => 1, 'POST' => 1, 'PUT' => 1, 'HEAD' => 1],
+                    'configurations' => ['GET' => 1, 'POST' => 1, 'PUT' => 1, 'HEAD' => 1],
+                    'products' => ['GET' => 1, 'POST' => 1, 'PUT' => 1, 'HEAD' => 1],
+                ];
 
-        if (!$api_was_enabled) {
-            Configuration::updateValue('PS_WEBSERVICE', 1);
-        }
+                WebserviceKey::setPermissionForAccount($apiAccess->id, $permissions);
 
-        $api_key = null;
-        if ($key_id = Configuration::get('TAP_WEBSERVICE_KEY_ID')) {
-            $apiAccess = new WebserviceKey($key_id);
-            $api_key = $apiAccess->key;
-        } else {
-            $apiAccess = new WebserviceKey();
-            $api_key = substr(hash('sha256', uniqid('', true)), 0, 32);
-            $apiAccess->key = $api_key;
-            $apiAccess->save();
+                Configuration::set('TAP_WEBSERVICE_KEY_ID', $apiAccess->id);
+            }
 
-            $permissions = [
-                'customers' => ['GET' => 1, 'POST' => 1, 'PUT' => 1, 'HEAD' => 1],
-                'orders' => ['GET' => 1, 'POST' => 1, 'PUT' => 1, 'HEAD' => 1],
-                'configurations' => ['GET' => 1, 'POST' => 1, 'PUT' => 1, 'HEAD' => 1],
-                'products' => ['GET' => 1, 'POST' => 1, 'PUT' => 1, 'HEAD' => 1],
+            $payload = [
+                'address1' => $address_obj->address1,
+                'address2' => $address_obj->address2,
+                'city' => $address_obj->city,
+                'postcode' => $address_obj->postcode,
+                'state' => $state_obj->name,
+                'country' => $country_obj->iso_code,
+                'vat_number' => $address_obj->vat_number,
+                'company' => $address_obj->company,
+                'domain' => $context->shop->domain,
+                'email' => $context->employee->email,
+                'firstname' => $context->employee->firstname,
+                'lastname' => $context->employee->lastname,
+                'currency' => $context->currency->iso_code,
+                'api_key' => $api_key,
+                'shop_id' => $context->shop->id,
+                'shop_group_id' => $context->shop->id_shop_group,
+                'login_key' => Configuration::get('TAPFILIATE_LOGIN_KEY')
             ];
 
-            WebserviceKey::setPermissionForAccount($apiAccess->id, $permissions);
+            $client = new GuzzleHttp\Client();
+            // @TODO remove
+            $client->setDefaultOption('verify', false);
 
-            Configuration::set('TAP_WEBSERVICE_KEY_ID', $apiAccess->id);
+            try {
+                $response = $client
+                    ->post(
+                        $this->getTapfiliateBaseURL() . '/integrations/prestashop/auth/check/',
+                        ['body' => $payload],
+                    )
+                    ->getBody()
+                    ->getContents();
+
+                Tools::redirect($response);
+            } catch(GuzzleHttp\Exception\BadResponseException $e) {
+                Logger::addLog("[TAPFILIATE] could not send webhook with message: {$e->getMessage()}");
+            }
         }
 
-        $payload = [
-            'address1' => $address1,
-            'address2' => $address2,
-            'city' => $city,
-            'postcode' => $postcode,
-            'state' => $state,
-            'country' => $country,
-            'vat_number' => $vat_number,
-            'company' => $company,
-            'domain' => $domain,
-            'email' => $email,
-            'firstname' => $firstname,
-            'lastname' => $lastname,
-            'currency' => $currency->iso_code,
-            'api_key' => $api_key,
-            'shop_id' => $shop_id,
-            'shop_group_id' => $shop_group_id,
-            'login_key' => Configuration::get('TAPFILIATE_LOGIN_KEY')
-        ];
-
-        $this->context->smarty->assign('payload', $payload);
-
-        return $this->display(__FILE__, 'views/templates/admin/configure.tpl');
-	}
+        return 0;
+    }
 
     public function hookDisplayHeader($params)
     {
@@ -237,18 +248,19 @@ class Tapfiliate extends Module
         $context = Context::getContext();
         $shop = $context->shop;
 
+        $client = new GuzzleHttp\Client();
+        // @TODO remove
+        $client->setDefaultOption('verify', false);
+
         try {
-            $client = new GuzzleHttp\Client();
-            // @TODO: Production url
-            $client->post('https://a.dev.tap/integrations/prestashop/webhooks/receive/', [
+            $client->post($this->getTapfiliateBaseURL() . '/integrations/prestashop/webhooks/receive/', [
                 'body' => $payload,
                 'headers' => [
                     'X-Webhook-Signature' => $signature,
                     'X-Prestashop-Domain' => $shop->domain
-                ],
-                'verify' => false // @TODO
+                ]
             ]);
-        } catch(\Exception $e) {
+        } catch(GuzzleHttp\Exception\BadResponseException $e) {
             Logger::addLog("[TAPFILIATE] could not send webhook with message: {$e->getMessage()}");
         }
     }
@@ -280,5 +292,10 @@ class Tapfiliate extends Module
         $currency = new CurrencyCore($order->id_currency);
 
         return $currency->iso_code;
+    }
+
+    private function getTapfiliateBaseURL(): string
+    {
+        return defined('ENV_TAPFILIATE_BASE_URL') ? ENV_TAPFILIATE_BASE_URL : self::PROD_TAPFILIATE_BASE_URL;
     }
 }
