@@ -20,6 +20,11 @@ services:
     image: prestashop/prestashop:1.7
     ports:
       - "8080:80"
+    extra_hosts:
+      - "localhost:172.17.0.1"
+      - "dev.tap:172.20.0.20"
+      - "app.dev.tap:172.20.0.20"
+
     volumes:
       - ./tapfiliate/:/var/www/html/modules/tapfiliate
     restart: always
@@ -36,3 +41,8 @@ services:
 
 volumes:
   db_data: {}
+
+networks:
+  default:
+    external:
+      name: tapfiliate-net

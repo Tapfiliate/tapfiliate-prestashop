@@ -1,0 +1,4 @@
+<?php
+
+// For local / test environment remove .dist extension
+const ENV_TAPFILIATE_BASE_URL = 'https://app.dev.tap';
