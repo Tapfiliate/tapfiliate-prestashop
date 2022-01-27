@@ -1,4 +1,4 @@
-{if $is_order neq true}<script src="https://script.tapfiliate.com/tapfiliate.js" type="text/javascript" async></script>{/if}
+{if $is_order neq true}<script src='{$script_url nofilter}' type="text/javascript" async></script>{/if}
 <script type="text/javascript">
     {literal}(function(t,a,p){t.TapfiliateObject=a;t[a]=t[a]||function(){
     (t[a].q=t[a].q||[]).push(arguments)}})(window,'tap');{/literal}
