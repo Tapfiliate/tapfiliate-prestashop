@@ -59,6 +59,34 @@ class Tapfiliate extends Module
 
     public function uninstall()
     {
+        if (null !== Configuration::get('TAPFILIATE_LOGIN_KEY') && null !== Configuration::get('TAPFILIATE_ID')) {
+            $context = Context::getContext();
+            $payload = [
+                'login_key' => Configuration::get('TAPFILIATE_LOGIN_KEY'),
+                'domain' => $context->shop->domain,
+                'disconnect' => 1,
+            ];
+
+            $client = new GuzzleHttp\Client();
+            // @TODO TF-563
+            $client->setDefaultOption('verify', false);
+
+            try {
+                $client->post(
+                    $this->getTapfiliateBaseURL() . '/integrations/prestashop/auth/check/',
+                    ['body' => $payload],
+                );
+            } catch (GuzzleHttp\Exception\BadResponseException $e) {
+                Logger::addLog("[TAPFILIATE] could not uninstall the plugin {$e->getMessage()}");
+
+                return;
+            }
+
+            Configuration::remove('TAPFILIATE_ID');
+            Configuration::remove('TAPFILIATE_LOGIN_KEY');
+            Configuration::remove('TAPFILIATE_WEBHOOK_SECRET');
+        }
+
         return parent::uninstall();
     }
 
@@ -124,7 +152,7 @@ class Tapfiliate extends Module
             ];
 
             $client = new GuzzleHttp\Client();
-            // @TODO remove
+            // @TODO TF-563
             $client->setDefaultOption('verify', false);
 
             try {
@@ -223,7 +251,7 @@ class Tapfiliate extends Module
         $payload = json_encode([
             'type' => $update_type,
             'payload' => [
-                'external_id' => (string)$order->id,
+                'external_id' => (string) $order->id,
                 'amount' => number_format($amount, 2),
                 'customer_id' => $customer_id,
                 'customer_email' => $customer_id,
@@ -249,7 +277,7 @@ class Tapfiliate extends Module
         $shop = $context->shop;
 
         $client = new GuzzleHttp\Client();
-        // @TODO remove
+        // @TODO TF-563
         $client->setDefaultOption('verify', false);
 
         try {
