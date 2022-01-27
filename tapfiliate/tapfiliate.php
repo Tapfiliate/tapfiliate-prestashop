@@ -14,6 +14,7 @@ class Tapfiliate extends Module
     const UPDATE_TYPE_UPDATE = 'order_update';
     const UPDATE_TYPE_NEW = 'order_new';
     const PROD_TAPFILIATE_BASE_URL = 'https://app.tapfiliate.com/';
+    const PROD_TAPFILIATE_SCRIPT_JS_URL = 'https://script.tapfiliate.com/tapfiliate.js';
 
     public function __construct()
     {
@@ -178,6 +179,7 @@ class Tapfiliate extends Module
         $this->context->smarty->assign([
             'tapfiliate_id' => Configuration::get('TAPFILIATE_ID'),
             'is_order' => false,
+            'script_url' => $this->getTapfiliateScriptURL(),
         ]);
 
         return $this->display(__FILE__, 'views/templates/hook/snippet.tpl');
@@ -325,5 +327,10 @@ class Tapfiliate extends Module
     private function getTapfiliateBaseURL(): string
     {
         return defined('ENV_TAPFILIATE_BASE_URL') ? ENV_TAPFILIATE_BASE_URL : self::PROD_TAPFILIATE_BASE_URL;
+    }
+
+    private function getTapfiliateScriptURL(): string
+    {
+        return defined('ENV_TAPFILIATE_SCRIPT_JS_URL') ? ENV_TAPFILIATE_SCRIPT_JS_URL : self::PROD_TAPFILIATE_SCRIPT_JS_URL;
     }
 }
