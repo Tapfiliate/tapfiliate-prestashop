@@ -83,9 +83,20 @@ class Tapfiliate extends Module
                 return;
             }
 
-            Configuration::remove('TAPFILIATE_ID');
-            Configuration::remove('TAPFILIATE_LOGIN_KEY');
-            Configuration::remove('TAPFILIATE_WEBHOOK_SECRET');
+            if ($key_id = Configuration::get('TAP_WEBSERVICE_KEY_ID')) {
+                $apiAccess = new WebserviceKey($key_id);
+
+                if ($this->name === $apiAccess->description) {
+                    $apiAccess->active = 0;
+                    $apiAccess->save();
+
+                    Configuration::deleteByName('TAP_WEBSERVICE_KEY_ID');
+                }
+            }
+
+            Configuration::deleteByName('TAPFILIATE_ID');
+            Configuration::deleteByName('TAPFILIATE_LOGIN_KEY');
+            Configuration::deleteByName('TAPFILIATE_WEBHOOK_SECRET');
         }
 
         return parent::uninstall();
@@ -98,7 +109,7 @@ class Tapfiliate extends Module
         if (
             defined('_PS_ADMIN_DIR_')
             && isset($args['controller_class'])
-            && $args['controller_class'] == 'AdminModulesController'
+            && $args['controller_class'] === 'AdminModulesController'
             && Tools::getValue('configure') === $this->name
         ) {
             $context = Context::getContext();
@@ -118,6 +129,7 @@ class Tapfiliate extends Module
                 $apiAccess = new WebserviceKey();
                 $api_key = substr(hash('sha256', uniqid('', true)), 0, 32);
                 $apiAccess->key = $api_key;
+                $apiAccess->description = $this->name;
                 $apiAccess->save();
 
                 $permissions = [
