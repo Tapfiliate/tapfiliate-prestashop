@@ -13,7 +13,7 @@ class Tapfiliate extends Module
 {
     const UPDATE_TYPE_UPDATE = 'order_update';
     const UPDATE_TYPE_NEW = 'order_new';
-    const PROD_TAPFILIATE_BASE_URL = 'https://app.tapfiliate.com/';
+    const PROD_TAPFILIATE_BASE_URL = 'https://app.tapfiliate.com';
     const PROD_TAPFILIATE_SCRIPT_JS_URL = 'https://script.tapfiliate.com/tapfiliate.js';
 
     public function __construct()
